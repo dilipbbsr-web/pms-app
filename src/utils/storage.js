@@ -51,39 +51,38 @@ export const Storage = {
     const users = getItem(KEYS.users, []);
     // Attach demo passwords at runtime (not stored in source)
     return users.map(u => ({
-      ...u, // spread existing user properties
+      ...u,
       password: u.password || DEMO_PASSWORDS[u.id] || 'Change@123',
     }));
-  }
-};
-
-  setUsers:          (v) => setItem(KEYS.users, v),
-
-  getGoals;         ()  => getItem(KEYS.goals, []),
-  setGoals;          (v) => setItem(KEYS.goals, v),
-
-  getKPIs;           ()  => getItem(KEYS.kpis, []),
-  setKPIs;           (v) => setItem(KEYS.kpis, v),
-
-  getTasks;          ()  => getItem(KEYS.tasks, []),
-  setTasks;          (v) => setItem(KEYS.tasks, v),
-
-  getAppraisals;     ()  => getItem(KEYS.appraisals, []),
-  setAppraisals;     (v) => setItem(KEYS.appraisals, v),
-
-  getApprovals;      ()  => getItem(KEYS.approvals, []),
-  setApprovals;      (v) => setItem(KEYS.approvals, v),
-
-  getNotifications; ()  => getItem(KEYS.notifications, []),
-  setNotifications;  (v) => setItem(KEYS.notifications, v),
-
-  getSession;       ()  => getItem(KEYS.session, null),
-  setSession;        (v) => setItem(KEYS.session, v),
-  clearSession;      ()  => removeItem(KEYS.session),
-
-  /** Clears ALL PMS data — used for factory reset / testing */
-  clearAll; () => {
-    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-    localStorage.removeItem('pms_id_counter');
   },
 
+  setUsers: (v) => setItem(KEYS.users, v),
+
+  getGoals: () => getItem(KEYS.goals, []),
+  setGoals: (v) => setItem(KEYS.goals, v),
+
+  getKPIs: () => getItem(KEYS.kpis, []),
+  setKPIs: (v) => setItem(KEYS.kpis, v),
+
+  getTasks: () => getItem(KEYS.tasks, []),
+  setTasks: (v) => setItem(KEYS.tasks, v),
+
+  getAppraisals: () => getItem(KEYS.appraisals, []),
+  setAppraisals: (v) => setItem(KEYS.appraisals, v),
+
+  getApprovals: () => getItem(KEYS.approvals, []),
+  setApprovals: (v) => setItem(KEYS.approvals, v),
+
+  getNotifications: () => getItem(KEYS.notifications, []),
+  setNotifications: (v) => setItem(KEYS.notifications, v),
+
+  getSession: () => getItem(KEYS.session, null),
+  setSession: (v) => setItem(KEYS.session, v),
+  clearSession: () => removeItem(KEYS.session),
+
+  /** Clears ALL PMS data — used for factory reset / testing */
+  clearAll: () => {
+    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+    localStorage.removeItem('pms_id_counter');
+  }
+};
