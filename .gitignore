@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Demo credentials - never commit
+src/data/demoPasswords.js
+
+# Local env
+.env
+.env.local

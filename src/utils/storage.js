@@ -44,8 +44,16 @@ export function removeItem(key) {
 }
 
 // ─── Typed helpers ────────────────────────────────────────────────
+import { DEMO_PASSWORDS } from '@data/demoPasswords';
+
 export const Storage = {
   getUsers:          ()  => getItem(KEYS.users, []),
+   // Attach demo passwords at runtime (not stored in source)
+    return users.map(u => ({
+      ...u,
+      password: u.password || DEMO_PASSWORDS[u.id] || 'Change@123',
+    }));
+  },
   setUsers:          (v) => setItem(KEYS.users, v),
 
   getGoals:          ()  => getItem(KEYS.goals, []),
