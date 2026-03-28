@@ -60,16 +60,16 @@ export const Storage = {
   setUsers:          (v) => setItem(KEYS.users, v),
 
   getGoals;         ()  => getItem(KEYS.goals, []),
-  setGoals:          (v) => setItem(KEYS.goals, v),
+  setGoals;          (v) => setItem(KEYS.goals, v),
 
-  getKPIs:           ()  => getItem(KEYS.kpis, []),
-  setKPIs:           (v) => setItem(KEYS.kpis, v),
+  getKPIs;           ()  => getItem(KEYS.kpis, []),
+  setKPIs;           (v) => setItem(KEYS.kpis, v),
 
-  getTasks:          ()  => getItem(KEYS.tasks, []),
-  setTasks:          (v) => setItem(KEYS.tasks, v),
+  getTasks;          ()  => getItem(KEYS.tasks, []),
+  setTasks;          (v) => setItem(KEYS.tasks, v),
 
-  getAppraisals:     ()  => getItem(KEYS.appraisals, []),
-  setAppraisals:     (v) => setItem(KEYS.appraisals, v),
+  getAppraisals;     ()  => getItem(KEYS.appraisals, []),
+  setAppraisals;     (v) => setItem(KEYS.appraisals, v),
 
   getApprovals:      ()  => getItem(KEYS.approvals, []),
   setApprovals:      (v) => setItem(KEYS.approvals, v),
