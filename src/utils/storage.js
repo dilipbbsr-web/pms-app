@@ -54,6 +54,7 @@ export const Storage = {
       password: u.password || DEMO_PASSWORDS[u.id] || 'Change@123',
     }));
   },
+  },
   setUsers:          (v) => setItem(KEYS.users, v),
 
   getGoals:          ()  => getItem(KEYS.goals, []),
