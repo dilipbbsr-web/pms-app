@@ -50,7 +50,7 @@ export const Storage = {
   getUsers:          ()  => getItem(KEYS.users, []),
    // Attach demo passwords at runtime (not stored in source)
     return users.map(u => ({
-      ...u,
+     
       password: u.password || DEMO_PASSWORDS[u.id] || 'Change@123',
     }));
   },
