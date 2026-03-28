@@ -47,14 +47,16 @@ export function removeItem(key) {
 import { DEMO_PASSWORDS } from '@data/demoPasswords';
 
 export const Storage = {
-  getUsers:          ()  => getItem(KEYS.users, []),
-   // Attach demo passwords at runtime (not stored in source)
-    return users.map(u => ({:
-     
+  getUsers: () => {
+    const users = getItem(KEYS.users, []);
+    // Attach demo passwords at runtime (not stored in source)
+    return users.map(u => ({
+      ...u, // spread existing user properties
       password: u.password || DEMO_PASSWORDS[u.id] || 'Change@123',
     }));
-  },
-  },
+  }
+};
+
   setUsers:          (v) => setItem(KEYS.users, v),
 
   getGoals:          ()  => getItem(KEYS.goals, []),
