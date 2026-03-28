@@ -10,7 +10,7 @@ export const SEED_USERS = [
   {
     id: 'EMP-0001', role: 'super_admin', status: 'active',
     name: 'Anjali Sharma',    email: 'anjali.sharma@company.com',
-    phone: '+91 98765 43210',
+    phone: '+91 98765 43210', password: 'Admin@123',
     dept: 'Human Resources',  designation: 'HR Director',
     joined: '2019-03-01',     reportingTo: null,
   },
@@ -19,14 +19,14 @@ export const SEED_USERS = [
   {
     id: 'EMP-0002', role: 'admin', status: 'active',
     name: 'Ravi Kumar',       email: 'ravi.kumar@company.com',
-    phone: '+91 98765 43211', 
+    phone: '+91 98765 43211', password: 'Admin@123',
     dept: 'Software Development', designation: 'Engineering Manager',
     joined: '2020-06-15',     reportingTo: 'EMP-0001',
   },
   {
     id: 'EMP-0003', role: 'admin', status: 'active',
     name: 'Pooja Nair',       email: 'pooja.nair@company.com',
-    phone: '+91 98765 43212',
+    phone: '+91 98765 43212', password: 'Admin@123',
     dept: 'Sales & Service',  designation: 'Sales Manager',
     joined: '2021-01-10',     reportingTo: 'EMP-0001',
   },
