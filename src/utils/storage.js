@@ -71,15 +71,15 @@ export const Storage = {
   getAppraisals;     ()  => getItem(KEYS.appraisals, []),
   setAppraisals;     (v) => setItem(KEYS.appraisals, v),
 
-  getApprovals:      ()  => getItem(KEYS.approvals, []),
-  setApprovals:      (v) => setItem(KEYS.approvals, v),
+  getApprovals;      ()  => getItem(KEYS.approvals, []),
+  setApprovals;      (v) => setItem(KEYS.approvals, v),
 
-  getNotifications:  ()  => getItem(KEYS.notifications, []),
-  setNotifications:  (v) => setItem(KEYS.notifications, v),
+  getNotifications; ()  => getItem(KEYS.notifications, []),
+  setNotifications;  (v) => setItem(KEYS.notifications, v),
 
-  getSession:        ()  => getItem(KEYS.session, null),
-  setSession:        (v) => setItem(KEYS.session, v),
-  clearSession:      ()  => removeItem(KEYS.session),
+  getSession;       ()  => getItem(KEYS.session, null),
+  setSession;        (v) => setItem(KEYS.session, v),
+  clearSession;      ()  => removeItem(KEYS.session),
 
   /** Clears ALL PMS data — used for factory reset / testing */
   clearAll: () => {
