@@ -82,7 +82,7 @@ export const Storage = {
   clearSession;      ()  => removeItem(KEYS.session),
 
   /** Clears ALL PMS data — used for factory reset / testing */
-  clearAll: () => {
+  clearAll; () => {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k));
     localStorage.removeItem('pms_id_counter');
   },
