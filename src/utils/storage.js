@@ -59,7 +59,7 @@ export const Storage = {
 
   setUsers:          (v) => setItem(KEYS.users, v),
 
-  getGoals:          ()  => getItem(KEYS.goals, []),
+  getGoals;         ()  => getItem(KEYS.goals, []),
   setGoals:          (v) => setItem(KEYS.goals, v),
 
   getKPIs:           ()  => getItem(KEYS.kpis, []),
