@@ -86,4 +86,4 @@ export const Storage = {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k));
     localStorage.removeItem('pms_id_counter');
   },
-};
+
