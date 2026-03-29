@@ -5,12 +5,14 @@
  *  — Role-based quick-login buttons (demo)
  *  — Account deactivation guard
  *  — Animated entrance
+ *
+ * FIX: handleLogin is now async and delegates to onLogin(email, pwd)
+ *      instead of doing client-side password matching from users array.
  */
 
 import { useState } from 'react';
-import { Shield, Mail, Lock, Eye, EyeOff, XCircle, AlertTriangle } from 'lucide-react';
+import { Shield, Mail, Lock, Eye, EyeOff, XCircle } from 'lucide-react';
 import { C, ROLE_COLORS } from '@constants/theme';
-import { ROLES } from '@constants/roles';
 
 export default function LoginScreen({ users, onLogin }) {
   const [email,  setEmail]  = useState('');
@@ -25,26 +27,31 @@ export default function LoginScreen({ users, onLogin }) {
     setTimeout(() => setShake(false), 500);
   };
 
-  const handleLogin = () => {
-    if (!email || !pwd) { setErr('Please enter both email and password.'); triggerShake(); return; }
-    setBusy(true); setErr('');
-    setTimeout(() => {
-      const u = users.find(u => u.email === email && u.password === pwd);
-      if (!u) {
-        setErr('Invalid email or password. Please try again.');
-        triggerShake(); setBusy(false); return;
-      }
-      if (u.status === 'inactive') {
-        setErr('This account has been deactivated. Please contact your Super Admin.');
-        triggerShake(); setBusy(false); return;
-      }
-      onLogin(u);
-    }, 700);
+  // ── FIX: async, delegates auth to App.jsx → Storage.loginUser → Supabase ──
+  const handleLogin = async () => {
+    if (!email || !pwd) {
+      setErr('Please enter both email and password.');
+      triggerShake();
+      return;
+    }
+    setBusy(true);
+    setErr('');
+
+    const ok = await onLogin(email, pwd);   // calls App.jsx handleLogin(email, password)
+
+    if (!ok) {
+      // App.jsx already shows a toast; show inline error too
+      setErr('Invalid email or password. Please try again.');
+      triggerShake();
+      setBusy(false);
+    }
+    // If ok === true, App.jsx sets currentUser and LoginScreen unmounts automatically
   };
 
+  // Quick-login fills the form fields from the users list (demo convenience only)
   const quickLogin = (role) => {
     const u = users.find(x => x.role === role && x.status === 'active');
-    if (u) { setEmail(u.email); setPwd(u.password); setErr(''); }
+    if (u) { setEmail(u.email); setPwd(u.password || ''); setErr(''); }
   };
 
   const QUICK = [
