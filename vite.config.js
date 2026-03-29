@@ -4,8 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/pms-app/',
-  resolve: {
+   resolve: {
     alias: {
       '@':           path.resolve(__dirname, './src'),
       '@constants':  path.resolve(__dirname, './src/constants'),
