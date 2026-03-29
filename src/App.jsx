@@ -1,18 +1,16 @@
 /**
- * App.jsx — COMPLETE Root Shell
- * All 11 parts wired and active.
+ * App.jsx — Supabase version
+ * All data loaded async from Supabase on mount.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { C }            from '@constants/theme';
-import { can }          from '@constants/roles';
-import { Storage }      from '@utils/storage';
-import { setIdCounter } from '@utils/idGenerator';
-import { SEED_USERS, SEED_ID_COUNTER } from '@data/seedData';
+import { C }       from '@constants/theme';
+import { can }     from '@constants/roles';
+import { Storage } from '@utils/storage';
+
 import Sidebar  from '@components/layout/Sidebar';
 import Topbar   from '@components/layout/Topbar';
 
-// All 11 parts
 import LoginScreen      from '@parts/01_UserManagement/LoginScreen';
 import OverviewSection  from '@parts/01_UserManagement/OverviewSection';
 import EmployeeList     from '@parts/01_UserManagement/EmployeeList';
@@ -31,61 +29,120 @@ import Notifications    from '@parts/10_Notifications/Notifications';
 import BulkImportExport from '@parts/11_ImportExport/BulkImportExport';
 
 const PAGE_META = {
-  'user-mgmt':     { title:'User Management',        subtitle:'Employees, roles & access'       },
-  'dept-hier':     { title:'Department & Hierarchy',  subtitle:'Org structure & approval chains' },
-  'goals':         { title:'Goal Setting',            subtitle:'Set and track SMART goals'       },
-  'kpi-kra':       { title:'KPI / KRA Tracking',      subtitle:'Key performance indicators'      },
-  'tasks':         { title:'Task Evaluation',         subtitle:'Assign, track & evaluate tasks'  },
-  'appraisal':     { title:'Performance Evaluation',  subtitle:'Appraisals & 360° feedback'      },
-  'approvals':     { title:'Approval Workflow',       subtitle:'3-level approval chain'          },
-  'dashboard':     { title:'Dashboard & Insights',    subtitle:'Charts, KPIs & analytics'        },
-  'reports':       { title:'Reports & Export',        subtitle:'Generate CSV · Excel · PDF'      },
-  'notifications': { title:'Notifications',           subtitle:'Alerts & activity log'           },
-  'import-export': { title:'Import / Export',         subtitle:'Bulk data management & backup'   },
+  'user-mgmt':     { title:'User Management',       subtitle:'Employees, roles & access'       },
+  'dept-hier':     { title:'Department & Hierarchy', subtitle:'Org structure & approval chains' },
+  'goals':         { title:'Goal Setting',           subtitle:'Set and track SMART goals'       },
+  'kpi-kra':       { title:'KPI / KRA Tracking',     subtitle:'Key performance indicators'      },
+  'tasks':         { title:'Task Evaluation',        subtitle:'Assign, track & evaluate tasks'  },
+  'appraisal':     { title:'Performance Evaluation', subtitle:'Appraisals & 360° feedback'      },
+  'approvals':     { title:'Approval Workflow',      subtitle:'3-level approval chain'          },
+  'dashboard':     { title:'Dashboard & Insights',   subtitle:'Charts, KPIs & analytics'        },
+  'reports':       { title:'Reports & Export',       subtitle:'Generate CSV · Excel · PDF'      },
+  'notifications': { title:'Notifications',          subtitle:'Alerts & activity log'           },
+  'import-export': { title:'Import / Export',        subtitle:'Bulk data management & backup'   },
 };
 
 const UM_TABS = [
-  { id:'overview', label:'Overview'       },
-  { id:'list',     label:'All Employees'  },
-  { id:'import',   label:'Import/Export',  perm:'importEmployees' },
-  { id:'roles',    label:'Roles',          superOnly:true },
+  { id:'overview', label:'Overview'      },
+  { id:'list',     label:'All Employees' },
+  { id:'import',   label:'Import/Export', perm:'importEmployees' },
+  { id:'roles',    label:'Roles',         superOnly:true },
 ];
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(()=>Storage.getSession());
+  const [currentUser, setCurrentUser] = useState(() => Storage.getSession());
   const [activePage,  setActivePage]  = useState('user-mgmt');
-  const [users, setUsers] = useState(()=>{
-    const s=Storage.getUsers(); if(s.length>0) return s;
-    setIdCounter(SEED_ID_COUNTER); Storage.setUsers(SEED_USERS); return SEED_USERS;
-  });
-  const [umView,   setUmView]   = useState('overview');
-  const [editUser, setEditUser] = useState(null);
-  useEffect(()=>{ Storage.setUsers(users); },[users]);
+  const [users,       setUsers]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [umView,      setUmView]      = useState('overview');
+  const [editUser,    setEditUser]    = useState(null);
 
-  const handleLogin  = u=>{ setCurrentUser(u); Storage.setSession(u); toast.success('Welcome, '+u.name.split(' ')[0]+'!'); };
-  const handleLogout = ()=>{ setCurrentUser(null); Storage.clearSession(); toast('Signed out'); };
-  const saveUser = u=>{
-    const isNew=!users.find(x=>x.id===u.id);
-    setUsers(p=>isNew?[...p,u]:p.map(x=>x.id===u.id?u:x));
-    if(currentUser?.id===u.id){setCurrentUser(u);Storage.setSession(u);}
-    setUmView('list'); setEditUser(null);
-    toast.success(u.name+(isNew?' added':' updated'));
+  // ── Load users from Supabase on mount ──────────────────────
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    const data = await Storage.getUsers();
+    setUsers(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  // ── Auth ───────────────────────────────────────────────────
+  const handleLogin = async (email, password) => {
+    const user = await Storage.loginUser(email, password);
+    if (!user) { toast.error('Invalid email or password'); return false; }
+    if (user.status === 'inactive') { toast.error('Account deactivated. Contact Admin.'); return false; }
+    setCurrentUser(user);
+    Storage.setSession(user);
+    toast.success('Welcome, ' + user.name.split(' ')[0] + '!');
+    return true;
   };
-  const deleteUser  = id  =>{ setUsers(p=>p.filter(u=>u.id!==id)); toast.error('Employee removed'); };
-  const importUsers = list=>{ setUsers(p=>[...p,...list]); toast.success(list.length+' employees imported'); };
 
-  if(!currentUser) return <><Toaster position="bottom-right"/><LoginScreen users={users} onLogin={handleLogin}/></>;
+  const handleLogout = () => {
+    setCurrentUser(null);
+    Storage.clearSession();
+    toast('Signed out');
+  };
 
-  const meta=PAGE_META[activePage]||{title:'PerfManager Pro',subtitle:''};
-  const primaryAction=activePage==='user-mgmt'&&can(currentUser.role,'addEmployee')&&!['add','edit'].includes(umView)
-    ?{label:'Add Employee',onClick:()=>{setEditUser(null);setUmView('add');}}:null;
+  // ── User CRUD ──────────────────────────────────────────────
+  const saveUser = async (user) => {
+    const saved = await Storage.upsertUser(user);
+    if (!saved) { toast.error('Failed to save. Check connection.'); return; }
+    if (currentUser?.id === saved.id) { setCurrentUser(saved); Storage.setSession(saved); }
+    await loadUsers();
+    setUmView('list'); setEditUser(null);
+    toast.success(user.name + ' saved');
+  };
 
-  const renderUM=()=>{
-    if(umView==='overview') return <OverviewSection users={users} currentUser={currentUser}/>;
-    if(umView==='list')     return <EmployeeList users={users} currentUser={currentUser} onEdit={u=>{setEditUser(u);setUmView('edit');}} onDelete={deleteUser}/>;
-    if(umView==='add'||umView==='edit') return <EmployeeForm editUser={editUser} onSave={saveUser} onCancel={()=>{setUmView('list');setEditUser(null);}} currentUser={currentUser} existingUsers={users}/>;
-    if(umView==='import') return <ImportExport users={users} onImport={importUsers}/>;
-    if(umView==='roles'&&currentUser.role==='super_admin') return <RoleManagement users={users} onUpdate={saveUser}/>;
+  const deleteUser = async (id) => {
+    await Storage.deleteUser(id);
+    await loadUsers();
+    toast.error('Employee removed');
+  };
+
+  const importUsers = async (list) => {
+    await Promise.all(list.map(u => Storage.upsertUser(u)));
+    await loadUsers();
+    toast.success(list.length + ' employees imported');
+  };
+
+  // ── Loading screen ─────────────────────────────────────────
+  if (loading) return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
+      <div style={{ width:48, height:48, borderRadius:14, background:`linear-gradient(135deg,${C.accent},${C.accentDim})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <p style={{ fontFamily:'Outfit,sans-serif', fontSize:18, fontWeight:700, color:C.text }}>PerfManager Pro</p>
+      <div style={{ display:'flex', gap:6 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width:8, height:8, borderRadius:'50%', background:C.accent, opacity:0.4, animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>
+        ))}
+      </div>
+      <p style={{ fontSize:13, color:C.muted }}>Connecting to database…</p>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}`}</style>
+    </div>
+  );
+
+  // ── Login screen ───────────────────────────────────────────
+  if (!currentUser) return (
+    <>
+      <Toaster position="bottom-right"/>
+      <LoginScreen users={users} onLogin={handleLogin}/>
+    </>
+  );
+
+  const meta = PAGE_META[activePage] || { title:'PerfManager Pro', subtitle:'' };
+  const primaryAction = activePage==='user-mgmt' && can(currentUser.role,'addEmployee') && !['add','edit'].includes(umView)
+    ? { label:'Add Employee', onClick:()=>{ setEditUser(null); setUmView('add'); } } : null;
+
+  const renderUM = () => {
+    if (umView==='overview') return <OverviewSection users={users} currentUser={currentUser}/>;
+    if (umView==='list')     return <EmployeeList users={users} currentUser={currentUser} onEdit={u=>{setEditUser(u);setUmView('edit');}} onDelete={deleteUser}/>;
+    if (umView==='add'||umView==='edit') return <EmployeeForm editUser={editUser} onSave={saveUser} onCancel={()=>{setUmView('list');setEditUser(null);}} currentUser={currentUser} existingUsers={users}/>;
+    if (umView==='import')   return <ImportExport users={users} onImport={importUsers}/>;
+    if (umView==='roles' && currentUser.role==='super_admin') return <RoleManagement users={users} onUpdate={saveUser}/>;
     return null;
   };
 
