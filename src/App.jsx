@@ -1,6 +1,7 @@
 /**
- * App.jsx — Supabase version
- * All data loaded async from Supabase on mount.
+ * App.jsx — Hybrid Supabase + localStorage version
+ * Users: Supabase (async)
+ * Goals/KPIs/Tasks/Appraisals/Approvals: localStorage (sync)
  */
 import { useState, useEffect, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -57,25 +58,36 @@ export default function App() {
   const [umView,      setUmView]      = useState('overview');
   const [editUser,    setEditUser]    = useState(null);
 
-  // ── Load users from Supabase on mount ──────────────────────
+  // ── Load users from Supabase ────────────────────────────────
   const loadUsers = useCallback(async () => {
     setLoading(true);
-    const data = await Storage.getUsers();
-    setUsers(data);
+    try {
+      const data = await Storage.getUsers();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      setUsers([]);
+      toast.error('Database connection failed. Check Supabase config.');
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  // ── Auth ───────────────────────────────────────────────────
+  // ── Auth ────────────────────────────────────────────────────
   const handleLogin = async (email, password) => {
-    const user = await Storage.loginUser(email, password);
-    if (!user) { toast.error('Invalid email or password'); return false; }
-    if (user.status === 'inactive') { toast.error('Account deactivated. Contact Admin.'); return false; }
-    setCurrentUser(user);
-    Storage.setSession(user);
-    toast.success('Welcome, ' + user.name.split(' ')[0] + '!');
-    return true;
+    try {
+      const user = await Storage.loginUser(email, password);
+      if (!user) { toast.error('Invalid email or password'); return false; }
+      if (user.status === 'inactive') { toast.error('Account deactivated. Contact Admin.'); return false; }
+      setCurrentUser(user);
+      Storage.setSession(user);
+      toast.success('Welcome, ' + user.name.split(' ')[0] + '!');
+      return true;
+    } catch (err) {
+      toast.error('Login failed. Check database connection.');
+      return false;
+    }
   };
 
   const handleLogout = () => {
@@ -84,14 +96,18 @@ export default function App() {
     toast('Signed out');
   };
 
-  // ── User CRUD ──────────────────────────────────────────────
+  // ── User CRUD ───────────────────────────────────────────────
   const saveUser = async (user) => {
-    const saved = await Storage.upsertUser(user);
-    if (!saved) { toast.error('Failed to save. Check connection.'); return; }
-    if (currentUser?.id === saved.id) { setCurrentUser(saved); Storage.setSession(saved); }
-    await loadUsers();
-    setUmView('list'); setEditUser(null);
-    toast.success(user.name + ' saved');
+    try {
+      const saved = await Storage.upsertUser(user);
+      if (!saved) { toast.error('Failed to save. Check connection.'); return; }
+      if (currentUser?.id === saved.id) { setCurrentUser(saved); Storage.setSession(saved); }
+      await loadUsers();
+      setUmView('list'); setEditUser(null);
+      toast.success(user.name + ' saved successfully');
+    } catch (err) {
+      toast.error('Save failed: ' + err.message);
+    }
   };
 
   const deleteUser = async (id) => {
@@ -101,31 +117,43 @@ export default function App() {
   };
 
   const importUsers = async (list) => {
-    await Promise.all(list.map(u => Storage.upsertUser(u)));
-    await loadUsers();
-    toast.success(list.length + ' employees imported');
+    try {
+      await Promise.all(list.map(u => Storage.upsertUser(u)));
+      await loadUsers();
+      toast.success(list.length + ' employees imported to Supabase');
+    } catch (err) {
+      toast.error('Import failed: ' + err.message);
+    }
   };
 
-  // ── Loading screen ─────────────────────────────────────────
+  // ── Loading screen ──────────────────────────────────────────
   if (loading) return (
     <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
-      <div style={{ width:48, height:48, borderRadius:14, background:`linear-gradient(135deg,${C.accent},${C.accentDim})`, display:'flex', alignItems:'center', justifyContent:'center' }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <div style={{ width:56, height:56, borderRadius:16, background:`linear-gradient(135deg,${C.accent},${C.accentDim})`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 8px 32px ${C.accent}50` }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
       </div>
-      <p style={{ fontFamily:'Outfit,sans-serif', fontSize:18, fontWeight:700, color:C.text }}>PerfManager Pro</p>
-      <div style={{ display:'flex', gap:6 }}>
+      <p style={{ fontFamily:'Outfit,sans-serif', fontSize:22, fontWeight:800, color:C.text }}>
+        PerfManager <span style={{color:C.accent}}>Pro</span>
+      </p>
+      <div style={{ display:'flex', gap:6, marginTop:4 }}>
         {[0,1,2].map(i => (
-          <div key={i} style={{ width:8, height:8, borderRadius:'50%', background:C.accent, opacity:0.4, animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite` }}/>
+          <div key={i} style={{ width:8, height:8, borderRadius:'50%', background:C.accent,
+            animation:`bounce 1.2s ease-in-out ${i*0.15}s infinite` }}/>
         ))}
       </div>
-      <p style={{ fontSize:13, color:C.muted }}>Connecting to database…</p>
-      <style>{`@keyframes pulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}`}</style>
+      <p style={{ fontSize:13, color:C.muted, marginTop:4 }}>Connecting to Supabase…</p>
+      <style>{`
+        @keyframes bounce {
+          0%,100% { opacity:0.3; transform:translateY(0); }
+          50%      { opacity:1;   transform:translateY(-6px); }
+        }
+      `}</style>
     </div>
   );
 
-  // ── Login screen ───────────────────────────────────────────
+  // ── Login screen ────────────────────────────────────────────
   if (!currentUser) return (
     <>
       <Toaster position="bottom-right"/>
@@ -139,8 +167,11 @@ export default function App() {
 
   const renderUM = () => {
     if (umView==='overview') return <OverviewSection users={users} currentUser={currentUser}/>;
-    if (umView==='list')     return <EmployeeList users={users} currentUser={currentUser} onEdit={u=>{setEditUser(u);setUmView('edit');}} onDelete={deleteUser}/>;
-    if (umView==='add'||umView==='edit') return <EmployeeForm editUser={editUser} onSave={saveUser} onCancel={()=>{setUmView('list');setEditUser(null);}} currentUser={currentUser} existingUsers={users}/>;
+    if (umView==='list')     return <EmployeeList users={users} currentUser={currentUser}
+                                     onEdit={u=>{setEditUser(u);setUmView('edit');}} onDelete={deleteUser}/>;
+    if (umView==='add'||umView==='edit') return <EmployeeForm editUser={editUser} onSave={saveUser}
+                                     onCancel={()=>{setUmView('list');setEditUser(null);}}
+                                     currentUser={currentUser} existingUsers={users}/>;
     if (umView==='import')   return <ImportExport users={users} onImport={importUsers}/>;
     if (umView==='roles' && currentUser.role==='super_admin') return <RoleManagement users={users} onUpdate={saveUser}/>;
     return null;
@@ -149,24 +180,28 @@ export default function App() {
   return (
     <><Toaster position="bottom-right"/>
     <div style={{display:'flex',minHeight:'100vh',background:C.bg}}>
-      <Sidebar currentUser={currentUser} activePage={activePage} onNavigate={p=>{setActivePage(p);setUmView('overview');}} onLogout={handleLogout}/>
+      <Sidebar currentUser={currentUser} activePage={activePage}
+        onNavigate={p=>{setActivePage(p);setUmView('overview');}} onLogout={handleLogout}/>
       <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0}}>
-        <Topbar currentUser={currentUser} pageTitle={meta.title} pageSubtitle={meta.subtitle} primaryAction={primaryAction}/>
+        <Topbar currentUser={currentUser} pageTitle={meta.title}
+          pageSubtitle={meta.subtitle} primaryAction={primaryAction}/>
         <main style={{flex:1,padding:28,overflow:'auto'}}>
 
-          {activePage==='user-mgmt'&&(<>
-            {can(currentUser.role,'viewAllEmployees')&&(
+          {activePage==='user-mgmt' && (<>
+            {can(currentUser.role,'viewAllEmployees') && (
               <div style={{display:'flex',gap:4,marginBottom:24,background:C.card,padding:4,borderRadius:12,width:'fit-content',border:`1px solid ${C.border}`}}>
-                {UM_TABS.map(tab=>{
-                  if(tab.superOnly&&currentUser.role!=='super_admin') return null;
-                  if(tab.perm&&!can(currentUser.role,tab.perm)) return null;
-                  const active=umView===tab.id;
-                  return(<button key={tab.id} onClick={()=>{setUmView(tab.id);setEditUser(null);}}
-                    style={{padding:'7px 16px',borderRadius:9,border:'none',fontSize:13,cursor:'pointer',
-                      background:active?`linear-gradient(135deg,${C.accent},${C.accentDim})`:'transparent',
-                      color:active?'#fff':C.muted,fontWeight:active?700:400,transition:'all .15s'}}>
-                    {tab.label}
-                  </button>);
+                {UM_TABS.map(tab => {
+                  if(tab.superOnly && currentUser.role!=='super_admin') return null;
+                  if(tab.perm && !can(currentUser.role,tab.perm)) return null;
+                  const active = umView===tab.id;
+                  return (
+                    <button key={tab.id} onClick={()=>{setUmView(tab.id);setEditUser(null);}}
+                      style={{padding:'7px 16px',borderRadius:9,border:'none',fontSize:13,cursor:'pointer',
+                        background:active?`linear-gradient(135deg,${C.accent},${C.accentDim})`:'transparent',
+                        color:active?'#fff':C.muted,fontWeight:active?700:400,transition:'all .15s'}}>
+                      {tab.label}
+                    </button>
+                  );
                 })}
               </div>
             )}
