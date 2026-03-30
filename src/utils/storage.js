@@ -1,9 +1,23 @@
 /**
  * src/utils/storage.js
  * Supabase-powered data layer — replaces localStorage.
+ * PATCHED: Added sync-safe in-memory cache so child components
+ * calling Storage.getXxx() directly never receive a Promise.
  */
 import { supabase } from './supabase';
 
+// ── In-memory cache (always arrays, never Promises) ───────────
+const cache = {
+  users:         [],
+  goals:         [],
+  kpis:          [],
+  tasks:         [],
+  appraisals:    [],
+  approvals:     [],
+  notifications: [],
+};
+
+// ── Snake ↔ Camel converters ──────────────────────────────────
 const toSnake = obj => {
   const map = {
     employeeId:'employee_id', assigneeId:'assignee_id', assignedBy:'assigned_by',
@@ -20,9 +34,7 @@ const toSnake = obj => {
     kpiName:'kpi_name', userId:'user_id',
   };
   const result = {};
-  Object.entries(obj).forEach(([k, v]) => {
-    result[map[k] || k] = v;
-  });
+  Object.entries(obj).forEach(([k, v]) => { result[map[k] || k] = v; });
   return result;
 };
 
@@ -43,23 +55,26 @@ const toCamel = obj => {
     kpi_name:'kpiName', user_id:'userId',
   };
   const result = {};
-  Object.entries(obj).forEach(([k, v]) => {
-    result[map[k] || k] = v;
-  });
+  Object.entries(obj).forEach(([k, v]) => { result[map[k] || k] = v; });
   return result;
 };
 
 const camelRows = rows => (rows || []).map(toCamel);
 
-async function getAll(table) {
-  const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+// ── Generic Supabase helpers ──────────────────────────────────
+async function fetchAll(table) {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .order('created_at', { ascending: false });
   if (error) { console.error(`[PMS] getAll ${table}:`, error.message); return []; }
   return camelRows(data);
 }
 
 async function upsertRow(table, obj) {
   const row = toSnake({ ...obj, updatedAt: new Date().toISOString() });
-  const { data, error } = await supabase.from(table).upsert(row, { onConflict: 'id' }).select().single();
+  const { data, error } = await supabase
+    .from(table).upsert(row, { onConflict: 'id' }).select().single();
   if (error) { console.error(`[PMS] upsert ${table}:`, error.message); return null; }
   return toCamel(data);
 }
@@ -70,37 +85,81 @@ async function deleteRow(table, id) {
   return true;
 }
 
+// ── Async loaders that also populate cache ────────────────────
+async function loadTable(table) {
+  const rows = await fetchAll(table);
+  cache[table] = rows;
+  return rows;
+}
+
 export const Storage = {
-  getUsers:        ()      => getAll('users'),
-  upsertUser:      (u)     => upsertRow('users', u),
-  deleteUser:      (id)    => deleteRow('users', id),
+  // ── USERS ────────────────────────────────────────────────────
+  getUsers:    ()  => loadTable('users'),
+  getUsersSync:()  => cache.users,           // sync, always an array
+  upsertUser:  (u) => upsertRow('users', u),
+  deleteUser:  (id)=> deleteRow('users', id),
+
   loginUser: async (email, password) => {
-    const { data, error } = await supabase.from('users').select('*').eq('email', email).eq('password', password).single();
+    const { data, error } = await supabase
+      .from('users').select('*')
+      .eq('email', email).eq('password', password).single();
     if (error || !data) return null;
     return toCamel(data);
   },
-  getGoals:        ()      => getAll('goals'),
-  upsertGoal:      (g)     => upsertRow('goals', g),
-  deleteGoal:      (id)    => deleteRow('goals', id),
-  getKPIs:         ()      => getAll('kpis'),
-  upsertKPI:       (k)     => upsertRow('kpis', k),
-  deleteKPI:       (id)    => deleteRow('kpis', id),
-  getTasks:        ()      => getAll('tasks'),
-  upsertTask:      (t)     => upsertRow('tasks', t),
-  deleteTask:      (id)    => deleteRow('tasks', id),
-  getAppraisals:   ()      => getAll('appraisals'),
-  upsertAppraisal: (a)     => upsertRow('appraisals', a),
-  getApprovals:    ()      => getAll('approvals'),
+
+  // ── GOALS ────────────────────────────────────────────────────
+  getGoals:    ()  => loadTable('goals'),
+  getGoalsSync:()  => cache.goals,
+  upsertGoal:  (g) => upsertRow('goals', g),
+  deleteGoal:  (id)=> deleteRow('goals', id),
+
+  // ── KPIs ─────────────────────────────────────────────────────
+  getKPIs:    ()   => loadTable('kpis'),
+  getKPIsSync:()   => cache.kpis,
+  upsertKPI:  (k)  => upsertRow('kpis', k),
+  deleteKPI:  (id) => deleteRow('kpis', id),
+
+  // ── TASKS ────────────────────────────────────────────────────
+  getTasks:    ()  => loadTable('tasks'),
+  getTasksSync:()  => cache.tasks,
+  upsertTask:  (t) => upsertRow('tasks', t),
+  deleteTask:  (id)=> deleteRow('tasks', id),
+
+  // ── APPRAISALS ───────────────────────────────────────────────
+  getAppraisals:    ()  => loadTable('appraisals'),
+  getAppraisalsSync:()  => cache.appraisals,
+  upsertAppraisal:  (a) => upsertRow('appraisals', a),
+
+  // ── APPROVALS ────────────────────────────────────────────────
+  getApprovals:    ()  => loadTable('approvals'),
+  getApprovalsSync:()  => cache.approvals,
   insertApproval: async (log) => {
     const row = toSnake({ ...log, reviewedAt: new Date().toISOString() });
-    const { data, error } = await supabase.from('approvals').insert(row).select().single();
+    const { data, error } = await supabase
+      .from('approvals').insert(row).select().single();
     if (error) { console.error('[PMS] insertApproval:', error.message); return null; }
     return toCamel(data);
   },
-  getNotifications:   ()   => getAll('notifications'),
-  upsertNotification: (n)  => upsertRow('notifications', n),
-  deleteNotification: (id) => deleteRow('notifications', id),
+
+  // ── NOTIFICATIONS ────────────────────────────────────────────
+  getNotifications:    ()  => loadTable('notifications'),
+  getNotificationsSync:()  => cache.notifications,
+  upsertNotification:  (n) => upsertRow('notifications', n),
+  deleteNotification:  (id)=> deleteRow('notifications', id),
+
+  // ── SESSION (localStorage) ───────────────────────────────────
   getSession:   ()     => { try { return JSON.parse(localStorage.getItem('pms_session')); } catch { return null; } },
   setSession:   (user) => localStorage.setItem('pms_session', JSON.stringify(user)),
   clearSession: ()     => localStorage.removeItem('pms_session'),
+
+  // ── LEGACY SYNC STUBS ────────────────────────────────────────
+  // These are no-ops kept for backward compatibility.
+  // Old child components calling Storage.setGoals() won't crash.
+  setGoals:         () => {},
+  setKPIs:          () => {},
+  setTasks:         () => {},
+  setAppraisals:    () => {},
+  setApprovals:     () => {},
+  setNotifications: () => {},
+  setUsers:         () => {},
 };
