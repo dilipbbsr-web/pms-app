@@ -1,23 +1,11 @@
 /**
  * src/utils/storage.js
- * Supabase-powered data layer — replaces localStorage.
- * PATCHED: Added sync-safe in-memory cache so child components
- * calling Storage.getXxx() directly never receive a Promise.
+ * Hybrid: Supabase for users, localStorage for all other data.
+ * This keeps all components working without async refactoring.
  */
 import { supabase } from './supabase';
 
-// ── In-memory cache (always arrays, never Promises) ───────────
-const cache = {
-  users:         [],
-  goals:         [],
-  kpis:          [],
-  tasks:         [],
-  appraisals:    [],
-  approvals:     [],
-  notifications: [],
-};
-
-// ── Snake ↔ Camel converters ──────────────────────────────────
+// ─── camelCase ↔ snake_case maps ─────────────────────────────
 const toSnake = obj => {
   const map = {
     employeeId:'employee_id', assigneeId:'assignee_id', assignedBy:'assigned_by',
@@ -61,44 +49,44 @@ const toCamel = obj => {
 
 const camelRows = rows => (rows || []).map(toCamel);
 
-// ── Generic Supabase helpers ──────────────────────────────────
-async function fetchAll(table) {
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) { console.error(`[PMS] getAll ${table}:`, error.message); return []; }
+// ─── Supabase helpers (async - users only) ────────────────────
+async function getSupabase(table) {
+  const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+  if (error) { console.error(`[PMS] get ${table}:`, error.message); return []; }
   return camelRows(data);
 }
 
-async function upsertRow(table, obj) {
+async function upsertSupabase(table, obj) {
   const row = toSnake({ ...obj, updatedAt: new Date().toISOString() });
-  const { data, error } = await supabase
-    .from(table).upsert(row, { onConflict: 'id' }).select().single();
+  const { data, error } = await supabase.from(table).upsert(row, { onConflict: 'id' }).select().single();
   if (error) { console.error(`[PMS] upsert ${table}:`, error.message); return null; }
   return toCamel(data);
 }
 
-async function deleteRow(table, id) {
+async function deleteSupabase(table, id) {
   const { error } = await supabase.from(table).delete().eq('id', id);
   if (error) { console.error(`[PMS] delete ${table}:`, error.message); return false; }
   return true;
 }
 
-// ── Async loaders that also populate cache ────────────────────
-async function loadTable(table) {
-  const rows = await fetchAll(table);
-  cache[table] = rows;
-  return rows;
-}
+// ─── localStorage helpers (sync - all other data) ────────────
+const LS = {
+  get: (key, fallback = []) => {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  },
+  set: (key, val) => {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+  },
+};
 
+// ─── Public Storage API ───────────────────────────────────────
 export const Storage = {
-  // ── USERS ────────────────────────────────────────────────────
-  getUsers:    ()  => loadTable('users'),
-  getUsersSync:()  => cache.users,           // sync, always an array
-  upsertUser:  (u) => upsertRow('users', u),
-  deleteUser:  (id)=> deleteRow('users', id),
 
+  // ── USERS — Supabase (async) ──────────────────────────────
+  getUsers:    ()     => getSupabase('users'),
+  upsertUser:  (u)    => upsertSupabase('users', u),
+  deleteUser:  (id)   => deleteSupabase('users', id),
   loginUser: async (email, password) => {
     const { data, error } = await supabase
       .from('users').select('*')
@@ -107,59 +95,39 @@ export const Storage = {
     return toCamel(data);
   },
 
-  // ── GOALS ────────────────────────────────────────────────────
-  getGoals:    ()  => loadTable('goals'),
-  getGoalsSync:()  => cache.goals,
-  upsertGoal:  (g) => upsertRow('goals', g),
-  deleteGoal:  (id)=> deleteRow('goals', id),
+  // ── GOALS — localStorage (sync) ───────────────────────────
+  getGoals:  ()       => LS.get('pms_v1_goals'),
+  setGoals:  (v)      => LS.set('pms_v1_goals', v),
 
-  // ── KPIs ─────────────────────────────────────────────────────
-  getKPIs:    ()   => loadTable('kpis'),
-  getKPIsSync:()   => cache.kpis,
-  upsertKPI:  (k)  => upsertRow('kpis', k),
-  deleteKPI:  (id) => deleteRow('kpis', id),
+  // ── KPIs — localStorage (sync) ────────────────────────────
+  getKPIs:   ()       => LS.get('pms_v1_kpis'),
+  setKPIs:   (v)      => LS.set('pms_v1_kpis', v),
 
-  // ── TASKS ────────────────────────────────────────────────────
-  getTasks:    ()  => loadTable('tasks'),
-  getTasksSync:()  => cache.tasks,
-  upsertTask:  (t) => upsertRow('tasks', t),
-  deleteTask:  (id)=> deleteRow('tasks', id),
+  // ── TASKS — localStorage (sync) ───────────────────────────
+  getTasks:  ()       => LS.get('pms_v1_tasks'),
+  setTasks:  (v)      => LS.set('pms_v1_tasks', v),
 
-  // ── APPRAISALS ───────────────────────────────────────────────
-  getAppraisals:    ()  => loadTable('appraisals'),
-  getAppraisalsSync:()  => cache.appraisals,
-  upsertAppraisal:  (a) => upsertRow('appraisals', a),
+  // ── APPRAISALS — localStorage (sync) ──────────────────────
+  getAppraisals:  ()  => LS.get('pms_v1_appraisals'),
+  setAppraisals:  (v) => LS.set('pms_v1_appraisals', v),
 
-  // ── APPROVALS ────────────────────────────────────────────────
-  getApprovals:    ()  => loadTable('approvals'),
-  getApprovalsSync:()  => cache.approvals,
-  insertApproval: async (log) => {
-    const row = toSnake({ ...log, reviewedAt: new Date().toISOString() });
-    const { data, error } = await supabase
-      .from('approvals').insert(row).select().single();
-    if (error) { console.error('[PMS] insertApproval:', error.message); return null; }
-    return toCamel(data);
-  },
+  // ── APPROVALS — localStorage (sync) ───────────────────────
+  getApprovals:  ()   => LS.get('pms_v1_approvals'),
+  setApprovals:  (v)  => LS.set('pms_v1_approvals', v),
 
-  // ── NOTIFICATIONS ────────────────────────────────────────────
-  getNotifications:    ()  => loadTable('notifications'),
-  getNotificationsSync:()  => cache.notifications,
-  upsertNotification:  (n) => upsertRow('notifications', n),
-  deleteNotification:  (id)=> deleteRow('notifications', id),
+  // ── NOTIFICATIONS — localStorage (sync) ───────────────────
+  getNotifications:  ()  => LS.get('pms_v1_notifications'),
+  setNotifications:  (v) => LS.set('pms_v1_notifications', v),
 
-  // ── SESSION (localStorage) ───────────────────────────────────
+  // ── SESSION — localStorage (sync) ─────────────────────────
   getSession:   ()     => { try { return JSON.parse(localStorage.getItem('pms_session')); } catch { return null; } },
   setSession:   (user) => localStorage.setItem('pms_session', JSON.stringify(user)),
   clearSession: ()     => localStorage.removeItem('pms_session'),
 
-  // ── LEGACY SYNC STUBS ────────────────────────────────────────
-  // These are no-ops kept for backward compatibility.
-  // Old child components calling Storage.setGoals() won't crash.
-  setGoals:         () => {},
-  setKPIs:          () => {},
-  setTasks:         () => {},
-  setAppraisals:    () => {},
-  setApprovals:     () => {},
-  setNotifications: () => {},
-  setUsers:         () => {},
+  // ── CLEAR ALL (reset) ──────────────────────────────────────
+  clearAll: () => {
+    ['pms_v1_goals','pms_v1_kpis','pms_v1_tasks','pms_v1_appraisals',
+     'pms_v1_approvals','pms_v1_notifications','pms_session','pms_id_counter']
+    .forEach(k => localStorage.removeItem(k));
+  },
 };
